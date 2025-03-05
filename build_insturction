@@ -1,0 +1,281 @@
+It appears that I cannot access the contents of your repository directly due to some limitations. However, you can manually create a text file in the repository and copy the following content into it:
+
+### STL Dosyası Yükleme ve İşleme Adımları
+
+1. **STL Dosyasının Yüklenmesi ve İlerleme Çubuğunun Gösterilmesi:**
+   - HTML formu oluşturulmalı ve JavaScript kullanılarak dosya yükleme işlemi gerçekleştirilmelidir.
+   - İlerleme çubuğu, dosya yükleme sürecini gösterecektir.
+
+   ```html
+   <!DOCTYPE html>
+   <html>
+   <head>
+       <title>STL Yükleyici</title>
+   </head>
+   <body>
+       <form id="uploadForm">
+           <input type="file" id="fileInput" accept=".stl" />
+           <progress id="progressBar" value="0" max="100"></progress>
+           <div id="previewContainer"></div>
+           <button type="button" id="convertButton">Dönüştür</button>
+       </form>
+
+       <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+       <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js/examples/js/loaders/STLLoader.js"></script>
+       <script>
+           document.getElementById('fileInput').addEventListener('change', function(event) {
+               const file = event.target.files[0];
+               const formData = new FormData();
+               formData.append('file', file);
+
+               const xhr = new XMLHttpRequest();
+               xhr.open('POST', '/api/upload', true);
+
+               xhr.upload.onprogress = function(event) {
+                   if (event.lengthComputable) {
+                       const percentComplete = (event.loaded / event.total) * 100;
+                       document.getElementById('progressBar').value = percentComplete;
+                   }
+               };
+
+               xhr.onload = function() {
+                   if (xhr.status === 200) {
+                       const response = JSON.parse(xhr.responseText);
+                       // STL dosyasını render etmek için Three.js kullan
+                       renderSTL(response.filePath);
+                   }
+               };
+
+               xhr.send(formData);
+           });
+
+           function renderSTL(filePath) {
+               const container = document.getElementById('previewContainer');
+               const scene = new THREE.Scene();
+               const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+               const renderer = new THREE.WebGLRenderer();
+               renderer.setSize(window.innerWidth, window.innerHeight);
+               container.appendChild(renderer.domElement);
+
+               const loader = new THREE.STLLoader();
+               loader.load(filePath, function(geometry) {
+                   const material = new THREE.MeshNormalMaterial();
+                   const mesh = new THREE.Mesh(geometry, material);
+                   scene.add(mesh);
+
+                   camera.position.z = 5;
+
+                   const animate = function() {
+                       requestAnimationFrame(animate);
+                       mesh.rotation.z += 0.01;
+                       renderer.render(scene, camera);
+                   };
+
+                   animate();
+               });
+           }
+       </script>
+   </body>
+   </html>
+   ```
+
+2. **Dosya Yükleme Tamamlandığında Dosyanın Backend'e Gönderilmesi ve İşlenmesi:**
+   - ASP.NET Core MVC'de bir API endpoint oluşturulacak ve dosya burada işlenecektir.
+
+   ```csharp
+   [Route("api/upload")]
+   [ApiController]
+   public class UploadController : ControllerBase
+   {
+       [HttpPost]
+       public async Task<IActionResult> Upload(IFormFile file)
+       {
+           if (file == null || file.Length == 0)
+           {
+               return BadRequest("No file uploaded.");
+           }
+
+           var filePath = Path.Combine("wwwroot", "uploads", file.FileName);
+           Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+
+           using (var stream = new FileStream(filePath, FileMode.Create))
+           {
+               await file.CopyToAsync(stream);
+           }
+
+           // STL dosyasını işleme kodunu buraya ekle
+           // ...
+
+           return Ok(new { filePath = $"/uploads/{file.FileName}" });
+       }
+   }
+   ```
+
+3. **Backend'den İşlenen Dosyanın 3 Boyutlu Görselinin Frontend'de Gösterilmesi:**
+
+   ```javascript
+   function renderSTL(filePath) {
+       const container = document.getElementById('previewContainer');
+       const scene = new THREE.Scene();
+       const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+       const renderer = new THREE.WebGLRenderer();
+       renderer.setSize(window.innerWidth, window.innerHeight);
+       container.appendChild(renderer.domElement);
+
+       const loader = new THREE.STLLoader();
+       loader.load(filePath, function(geometry) {
+           const material = new THREE.MeshNormalMaterial();
+           const mesh = new THREE.Mesh(geometry, material);
+           scene.add(mesh);
+
+           camera.position.z = 5;
+
+           const animate = function() {
+               requestAnimationFrame(animate);
+               mesh.rotation.z += 0.01;
+               renderer.render(scene, camera);
+           };
+
+           animate();
+       });
+   }
+   ```
+
+4. **Dönüştür Butonuna Basıldığında Modelin Backend'de Makrome Düğüm Noktalarına Dönüştürülmesi ve Result Sayfasına Yönlendirilmesi:**
+
+   ```javascript
+   document.getElementById('convertButton').addEventListener('click', function() {
+       const filePath = document.querySelector('#previewContainer canvas').dataset.filePath;
+
+       fetch('/api/convert', {
+           method: 'POST',
+           headers: {
+               'Content-Type': 'application/json'
+           },
+           body: JSON.stringify({ filePath })
+       })
+       .then(response => response.json())
+       .then(data => {
+           window.location.href = `/result?filePath=${data.filePath}`;
+       });
+   });
+   ```
+
+   ```csharp
+   [Route("api/[controller]")]
+   [ApiController]
+   public class ConvertController : ControllerBase
+   {
+       [HttpPost]
+       public async Task<IActionResult> Convert([FromBody] ConvertRequest request)
+       {
+           // Makrome düğüm noktalarına dönüştürme işlemi burada yapılacak
+           var convertedFilePath = await ConvertToMacrameNodesAsync(request.FilePath);
+
+           return Ok(new { filePath = convertedFilePath });
+       }
+
+       private Task<string> ConvertToMacrameNodesAsync(string filePath)
+       {
+           // Dönüştürme işlemini gerçekleştirin
+           // ...
+
+           // Dönüştürülmüş dosya yolunu döndürün
+           return Task.FromResult("/path/to/converted/file");
+       }
+
+       public class ConvertRequest
+       {
+           public string FilePath { get; set; }
+       }
+   }
+   ```
+
+5. **Result Sayfasında 3 Boyutlu Dinamik Görselin Gösterilmesi ve PDF Formatında İndirilebilir Reçete Oluşturma Düğmesinin Eklenmesi:**
+
+   ```html
+   <!DOCTYPE html>
+   <html>
+   <head>
+       <title>Result</title>
+   </head>
+   <body>
+       <div id="resultContainer"></div>
+       <button id="downloadButton">İndir</button>
+
+       <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+       <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js/examples/js/loaders/STLLoader.js"></script>
+       <script>
+           document.addEventListener('DOMContentLoaded', function() {
+               const urlParams = new URLSearchParams(window.location.search);
+               const filePath = urlParams.get('filePath');
+               renderSTL(filePath);
+
+               document.getElementById('downloadButton').addEventListener('click', function() {
+                   window.location.href = `/api/download?filePath=${filePath}`;
+               });
+           });
+
+           function renderSTL(filePath) {
+               const container = document.getElementById('resultContainer');
+               const scene = new THREE.Scene();
+               const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+               const renderer = new THREE.WebGLRenderer();
+               renderer.setSize(window.innerWidth, window.innerHeight);
+               container.appendChild(renderer.domElement);
+
+               const loader = new THREE.STLLoader();
+               loader.load(filePath, function(geometry) {
+                   const material = new THREE.MeshNormalMaterial();
+                   const mesh = new THREE.Mesh(geometry, material);
+                   scene.add(mesh);
+
+                   camera.position.z = 5;
+
+                   const animate = function() {
+                       requestAnimationFrame(animate);
+                       mesh.rotation.z += 0.01;
+                       renderer.render(scene, camera);
+                   };
+
+                   animate();
+               });
+           }
+       </script>
+   </body>
+   </html>
+   ```
+
+   ```csharp
+   [Route("api/[controller]")]
+   [ApiController]
+   public class DownloadController : ControllerBase
+   {
+       [HttpGet]
+       public async Task<IActionResult> Download([FromQuery] string filePath)
+       {
+           // PDF oluşturma işlemi burada yapılacak
+           var pdfFilePath = await CreatePdfAsync(filePath);
+
+           var memory = new MemoryStream();
+           using (var stream = new FileStream(pdfFilePath, FileMode.Open))
+           {
+               await stream.CopyToAsync(memory);
+           }
+           memory.Position = 0;
+
+           return File(memory, "application/pdf", Path.GetFileName(pdfFilePath));
+       }
+
+       private Task<string> CreatePdfAsync(string filePath)
+       {
+           // PDF oluşturma işlemini gerçekleştirin
+           // ...
+
+           // Oluşturulan PDF dosyasının yolunu döndürün
+           return Task.FromResult("/path/to/generated/pdf");
+       }
+   }
+   ```
+
+Bu adımları bir text dosyasına ekleyip, oluşturduğunuz repository'ye yükleyerek belgeleri tamamlayabilirsiniz. Eğer başka bir konuda yardıma ihtiyaç duyarsanız, lütfen bana bildirin.
